@@ -1,55 +1,67 @@
 import asyncio
-import json
+from threading import Thread
 import time
-import discord
 from colorama import Fore
 from discord.ext import commands
+from DiscordDB.Funcs import *
+from DiscordDB.TableHeading import TableHeading
+
+HEADING_KEY = '|'
 
 
-async def GetRowInfo(channel):
-    async for m in channel.history(limit=1, oldest_first=True):
-        return json.loads(m.content)
+class Database(commands.Bot):
+    def __init__(self, guild_id: int, category_id: int, **kwargs):
+        super().__init__(**kwargs)
+        self.guild: discord.Guild | None = None
+        self.category: discord.CategoryChannel | None = None
 
+        self.guild_id = guild_id
+        self.category_id = category_id
 
-class Database:
-    def __init__(self, guild_id: int, category_id: int, bot: commands.Bot):
-        self.guild: discord.Guild = bot.get_guild(guild_id)
-        self.category: discord.CategoryChannel = bot.get_channel(category_id)
-        self.bot = bot
+    async def tether(self):
+        print(Fore.CYAN + "[DEBUG] DiscordDB bot is online")
+        self.guild = self.get_guild(self.guild_id)
+        self.category = self.get_channel(self.category_id)
 
-    async def __GetTableChannel(self, table):
-        return list(filter(lambda x: x.name == table and isinstance(x, discord.TextChannel), self.category.channels))[0]
+    async def __GetTableChannel(self, table_name: str):
+        return list(filter(lambda x: x.name == table_name.lower() and isinstance(x, discord.TextChannel), self.category.channels))[0]
 
-    async def create_table(self, table_name: str, row_info: dict):
+    async def create_table(self, table_name: str, table_heading: TableHeading):
         start = time.time()
-        if table_name in tuple(map(lambda x: x.name, self.category.channels)):
-            print(Fore.RED + f"[Debug] Unsuccessful, this channel (table) name '{table_name}' already exists")
+        if table_name.lower() in tuple(map(lambda x: x.name, self.category.channels)):
+            print(Fore.RED + f"[Debug] Unable to create table, this channel (table) name '{table_name}' already exists")
             return
 
         channel = await self.guild.create_text_channel(table_name, category=self.category)
-        await channel.send(json.dumps(row_info) + '|')
+        await channel.send(str(table_heading) + HEADING_KEY)
         print(Fore.GREEN + f"[Debug] Successfully created table channel in {round(time.time() - start, 3)} seconds")
 
-    async def insert(self, table, items: list):
-        channel = await self.__GetTableChannel(table)
-        row_info = await GetRowInfo(channel)
+    async def insert(self, table_name, items: list) -> bool:
+        channel = await self.__GetTableChannel(table_name)
+        th = await GetTableHeading(channel)
+        if not th.compare(items):
+            print(Fore.RED + f"[DEBUG]: Cannot insert these values as they do not match with the row types")
+            return False
+        pk = th.get_primary_key()
+        index = th.get_index(pk)
+        if pk is not None and await self.select(table_name, lambda x: x[index] == items[index]) != []:
+            print(Fore.RED + f"[DEBUG]: Cannot insert these values as the primary key {pk} "
+                             f"already has this value of {items[index]}")
+            return False
 
-        for i, key in enumerate(row_info):
-            if not isinstance(items[i], eval(row_info[key])):
-                print(Fore.RED + f"[DEBUG]: Cannot insert these values as they do not match with the row types")
-                return
-
-        content = json.dumps(items) + '\n'  # The content we are going to push into the channel
+        content = json.dumps(items)  # The content we are going to push into the channel
         if len(content) > 2000:
             print(Fore.RED + f"[DEBUG]: Cannot insert these values as they exceed 2000 character limit on discord")
+            return False
 
         await channel.send(content)
+        return True
 
-    async def select(self, table, where):
-        channel = await self.__GetTableChannel(table)
+    async def select(self, table_name, where):
+        channel = await self.__GetTableChannel(table_name)
         out = []
         async for m in channel.history(limit=None):
-            if m.content[-1] == '|':
+            if m.content[-1] == HEADING_KEY:
                 continue
             row = json.loads(m.content)
             if where(row):
