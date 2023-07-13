@@ -11,4 +11,4 @@ After installing the [discord.py](https://pypi.org/project/discord.py/) python p
 - Now just run your token at the end of the script. Ensure this is at the end since it's a blocking method call.
   
 > **Note**  
-> You can download [Chrome Driver Here](https://chromedriver.chromium.org/downloads)  
+> Since the database class inherits from bot class, you can create your bot with the database class as well.
