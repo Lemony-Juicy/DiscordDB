@@ -1,6 +1,6 @@
 import json
 import discord
-from DiscordDB.TableHeading import TableHeading
+from .TableHeading import TableHeading
 
 
 async def GetTableHeading(channel: discord.TextChannel) -> TableHeading:
