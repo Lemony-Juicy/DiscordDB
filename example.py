@@ -1,4 +1,3 @@
-import random
 import discord
 from DiscordDB import Database, TableHeading
 from config import TOKEN  # import discord bot's token from another file
@@ -24,10 +23,11 @@ async def on_ready():
     # Note this will only ever update one person since username is a primary key.
     await db.update("scores", {'score': 15, 'is_premium_user': False}, lambda x: x['username'] == 'convolutedorange')
 
+    # Deleting any rows with a score of greater than 20.
     await db.delete_rows("scores", lambda x: x['score'] > 20)
 
-    # the parameter in the lambda function takes a RowData object
+    # The parameter in the lambda function takes a RowData object.
     selected_rowDatas = await db.select("scores", lambda x: x['username'] == 'convolutedorange')
-
+    print(list(map(lambda x: x.get_row_list(), selected_rowDatas)))
 
 db.run(TOKEN)
